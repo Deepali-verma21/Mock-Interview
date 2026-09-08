@@ -174,6 +174,8 @@ with st.sidebar:
         st.markdown('<span class="badge-status badge-gemini">✨ Gemini 2.5 Active</span>', unsafe_allow_html=True)
     else:
         st.markdown('<span class="badge-status badge-sim">⚡ Simulation Mode Active</span>', unsafe_allow_html=True)
+
+    st.caption("Build: debug-diag-v1")
         
     st.markdown("---")
     st.subheader("Interview Configuration")
@@ -251,7 +253,18 @@ with tab_interview:
 
     # Surface the real reason live grading isn't running, instead of the
     # generic "simulation mode" message hiding what actually failed.
-    if st.session_state.gemini_client and getattr(session, "last_error", None):
+    # Always-visible debug panel — not conditional on an error existing, so
+    # you can confirm what's actually running in the deployed app rather
+    # than guessing whether the fix took effect.
+    with st.expander("🔧 Debug: AI Grading Status", expanded=True):
+        st.write("Sidebar client is set:", st.session_state.gemini_client is not None)
+        st.write("Sidebar client type:", type(st.session_state.gemini_client).__name__)
+        st.write("Active session's client is set:", getattr(session, "client", None) is not None)
+        st.write("Active session's client type:", type(getattr(session, "client", None)).__name__)
+        st.write("session.last_error attribute exists:", hasattr(session, "last_error"))
+        st.write("session.last_error value:", getattr(session, "last_error", "N/A - attribute missing, old code is running"))
+
+    if getattr(session, "last_error", None):
         st.error(f"Live grading call failed, so this fell back to simulation mode. Error: `{session.last_error}`")
 
     st.markdown("---")
@@ -353,11 +366,15 @@ with tab_interview:
 
         with col_act2:
             if st.button("⚡ Challenge Complexity", use_container_width=True):
-                with st.spinner("Interviewer is challenging complexity..."):
-                    session.process_candidate_answer(final_answer_to_submit if final_answer_to_submit else "Can we optimize this further?", action_override="Challenge My Complexity")
-                    st.session_state.transcribed_text_buffer = ""
-                    st.session_state.mic_reset_counter += 1
-                    st.rerun()
+                # Ensure the candidate provides a substantive answer before challenging complexity
+                if final_answer_to_submit and len(final_answer_to_submit.strip()) > 10:
+                    with st.spinner("Interviewer is challenging complexity..."):
+                        session.process_candidate_answer(final_answer_to_submit, action_override="Challenge My Complexity")
+                        st.session_state.transcribed_text_buffer = ""
+                        st.session_state.mic_reset_counter += 1
+                        st.rerun()
+                else:
+                    st.warning("Please provide a detailed explanation of how you would optimize the solution before challenging the complexity.")
 
         with col_act3:
             if st.button("⚠️ Ask Edge Case", use_container_width=True):
